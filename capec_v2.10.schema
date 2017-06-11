@@ -1,0 +1,185 @@
+# http://github/...
+
+types:
+  embeddedString:[0]*->string
+  #embeddedId:[0]*->id
+  structuredText:#{structuredText, node:_->idem}->string
+  
+  
+  
+  
+structures:
+
+  #
+  #
+  # Main relationships:
+
+  # Links AttackPattern -> AttackPattern/Category
+  ?:Related_Attack_Patterns()
+    :Related_Attack_Pattern(:Relationship_Target_ID->id as targetId, :#{parseRsTarget, text:Relationship_Target_Form->string}->string as RsTarget, :#{parseRsNature, text:Relationship_Nature->string}->string as RsNature)[]
+      AttackPattern(id:${0}->id)-[${RsNature}()]->${RsTarget}(id:${targetId}->id)
+  
+  # Links Category <-> AttackPattern
+  ?:Relationships()
+    :Relationship(:Relationship_Target_ID->id as targetId)[]
+      Category(id:${0}->id)-[HAS_MEMBER()]->AttackPattern(id:${targetId}->id)
+      AttackPattern(id:${targetId}->id)-[CHILD_OF()]->Category(id:${0}->id)
+  
+  
+  
+  #
+  #
+  # AttackPattern & Category Sub-nodes:
+  
+  ?:Alternate_Terms()
+    AlternateTerm:Alternate_Term(id:->id, ?term:Term->string as AltTerm, ?description:Alternate_Term_Description->structuredText as AltDesc)[]
+      AlternateTerm(id:${AlternateTermId}->id)-[IDENTIFIES()]->${0}(id:${1}->id)
+  
+  ?:Attack_Prerequisites()
+    ?AttackPrerequisite:Attack_Prerequisite(id:->id, text:_->structuredText as RequirementText)[]
+      ${0}(id:${1}->id)-[REQUIRES()]->AttackPrerequisite(id:${AttackPrerequisiteId}->id)
+  
+  # Content_History structure, used in both Category and AttackPattern
+  :Content_History()
+    ?:Submissions()
+      Submission:Submission(id:->id)[]
+        ${0}(id:${1}->id)-[HAS_HISTORY()]->Submission(id:${SubmissionId}->id)
+        ?Person:Submitter(name:_->string as PersonName)@MERGE
+          Person(name:"${PersonName}"->string)-[SUBMITTED()]->Submission(id:${SubmissionId}->id)
+        ?Organization:Submitter_Organization(name:_->string as OrganizationName)@MERGE
+          Organization(name:"${OrganizationName}"->string)-[SUBMITTED()]->Submission(id:${SubmissionId}->id)
+        ?Date:Submission_Date(date:_->string as SubDate)@MERGE
+          Submission(id:${SubmissionId}->id)-[SUBMITTED_ON()]->Date(date:"${SubDate}"->string)
+        ?Comment:Submission_Comment(comment:_->string as SubmissionComment)@MERGE
+          Comment(comment:"${SubmissionComment}"->string)-[COMMENTS()]->Submission(id:${SubmissionId}->id)
+    ?:Contributions()
+      Contribution:Contribution(id:->id)[]
+        ${0}(id:${1}->id)-[HAS_HISTORY()]->Contribution(id:${ContributionId}->id)
+        ?Person:Contributor(name:_->string as PersonName)@MERGE
+          Person(name:"${PersonName}"->string)-[CONTRIBUTED()]->Contribution(id:${ContributionId}->id)
+        ?Organization:Contribution_Organization(name:_->string as OrganizationName)@MERGE
+          Organization(name:"${OrganizationName}"->string)-[CONTRIBUTED()]->Contribution(id:${ContributionId}->id)
+        ?Date:Contribution_Date(date:_->string as SubDate)@MERGE
+          Contribution(id:${ContributionId}->id)-[CONTRIBUTED_ON()]->Date(date:"${SubDate}"->string)
+        ?Comment:Contribution_Comment(comment:_->string as ContributionComment)@MERGE
+          Comment(comment:"${ContributionComment}"->string)-[COMMENTS()]->Contribution(id:${ContributionId}->id)
+    ?:Modifications()
+      Modification:Modification(id:->id)[]
+        ${0}(id:${1}->id)-[HAS_HISTORY()]->Modification(id:${ModificationId}->id)
+        ?Person:Modifier(name:_->string as PersonName)@MERGE
+          Person(name:"${PersonName}"->string)-[MODIFIED()]->Modification(id:${ModificationId}->id)
+        ?Organization:Modification_Organization(name:_->string as OrganizationName)@MERGE
+          Organization(name:"${OrganizationName}"->string)-[MODIFIED()]->Modification(id:${ModificationId}->id)
+        ?Date:Modification_Date(date:_->string as SubDate)@MERGE
+          Modification(id:${ModificationId}->id)-[MODIFIED_ON()]->Date(date:"${SubDate}"->string)
+        ?Comment:Modification_Comment(comment:_->string as ModificationComment)@MERGE
+          Comment(comment:"${ModificationComment}"->string)-[COMMENTS()]->Modification(id:${ModificationId}->id)
+    ?:Previous_Entry_Names()
+      PreviousEntryName:Previous_Entry_Name(id:->id, name:_->string, :@Name_Change_Date->string as PreviousDate)[]
+        Date:(date:"${PreviousDate}"->string)@MERGE
+          PreviousEntryName(id:${PreviousEntryNameId}->id)-[EDITED_ON()]->Date(date:"${PreviousDate}"->string)
+  
+  ?:Description()
+    #
+    # Categories-related
+    
+    ?Description:Description_Summary(id:->id, summary:_->string)
+      Description(id:${DescriptionId}->id)-[DESCRIBES()]->${0}(id:${1}->id)
+    
+    #
+    # AttackPatterns-related
+    
+    ?Description:Summary(id:->id, summary:_->string)
+      Description(id:${DescriptionId}->id)-[DESCRIBES()]->${0}(id:${1}->id)
+    
+    ?:Attack_Execution_Flow()
+      :Attack_Phases()
+        AttackPhase:Attack_Phase(id:@ID->id, name:@Name->string)[]
+          :Attack_Steps()
+            AttackStep:Attack_Step(id:@ID->id, ?title:Custom_Attack_Step:Attack_Step_Title->string, ?description:Custom_Attack_Step:Attack_Step_Description->structuredText)[]
+              :Custom_Attack_Step()
+                ?:Attack_Step_Techniques()
+                  AttackStepTechnique:Attack_Step_Technique(id:@ID->id, description:Attack_Step_Technique_Description->structuredText)[]
+                    :Environments()->Environments(:"AttackStepTechnique"->string as 0, :${AttackStepTechniqueId}->id as 1)
+                    ?:Leveraged_Attack_Patterns()
+                      :Leveraged_Attack_Pattern_ID(id:_->id as AttackPatternId)[]
+                        AttackPattern(id:${AttackPatternId}->id)-[LEVERAGES()]->AttackStepTechnique(id:${AttackStepTechniqueId}->id)
+                ?:Indicators()
+                  Indicator:Indicator(id:@ID->id, type:@type->string, ?description:Indicator_Description->structuredText)[]
+                    AttackPattern(id:${AttackPatternId}->id)-[HAS_INDICATOR()]->Indicator(id:${IndicatorId}->id)
+                    :Environments()->Environments(:"Indicator"->string as 0, :${IndicatorId}->id as 1)
+                ?:Outcomes()
+                  Outcome:Outcome(id:@ID->id, type:@type->string, ?description:Outcome_Description->string)[]
+                    AttackPattern(id:${AttackPatternId}->id)-[HAS_OUTCOME()]->Outcome(id:${OutcomeId}->id)
+                ?:Security_Controls()
+                  SecurityControl:Security_Control(id:@ID->id, type:@type->string, ?description:Outcome_Description->string)[]
+                    AttackPattern(id:${AttackPatternId}->id)-[HAS_SECURITY_CONTROL()]->SecurityControl(id:${SecurityControlId}->id)
+  
+  ?:Environments(:#{splitString, text:_->string, separator:" "->string}->idem as environments)
+    :${environments}()[]
+      ${0}(id:${1}->id)-[IN_ENVIRONMENT()]->Environment(name:_->string)
+  
+  ?:References()
+    ?Reference:Reference(?id:@Reference_ID->string, local_id:@Local_Reference_ID->string as RefId, ?author:Reference_Author->string, ?title:Reference_Title->string, ?section:Reference_Section->string, ?publisher:Reference_Publisher->string, ?pubdate:Reference_PubDate->string, ?link:Reference_Link->string)[]@MERGE
+      ${0}(id:${1}->id)-[REFERENCES()]->Reference(local_id:"${RefId}"->string)
+  
+  ?:Related_Vulnerabilities()
+    CVE:Related_Vulnerability(id:Vulnerability_ID->string as CVEId, ?description:Vulnerability_Description->structuredText)[]
+      ${0}(id:${1}->id)-[HAS_CVE()]->CVE(id:"${CVEId}"->string)
+  
+  ?:Related_Weaknesses()
+    CWE:Related_Weakness(id:CWE_ID->id)[]@MERGE
+      ${0}(id:${1}->id)-[HAS_CWE(type:Weakness_Relationship_Type->string)]->CWE(id:${CWEId}->id)
+  
+  ?ResourcesRequired:Resources_Required(id:->id, text:_->structuredText as RequirementText)
+    ${0}(id:${1}->id)-[REQUIRES()]->ResourcesRequired(id:${ResourcesRequiredId}->id)
+  
+  
+  
+
+schema:
+  :Attack_Pattern_Catalog()
+    :Categories()
+      Category:Category(id:@ID->id, name:@Name->string, status:@Status->string)[]
+        :Attack_Prerequisites()->Attack_Prerequisites(:"Category"->string as 0, :${CategoryId}->id as 1)
+        :Content_History()->Content_History(:"Category"->string as 0, :${CategoryId}->id as 1)
+        :Description()->Description(:"Category"->string as 0, :${CategoryId}->id as 1)
+        :References()->References(:"Category"->string as 0, :${CategoryId}->id as 1)
+        :Related_Weaknesses()->Related_Weaknesses(:"Category"->string as 0, :${CategoryId}->id as 1)
+        :Relationships()->Relationships(:${CategoryId}->id as 0)
+        :Resources_Required()->Resources_Required(:"Category"->string as 0, :${CategoryId}->id as 1)
+    :Attack_Patterns()
+      AttackPattern:Attack_Pattern(id:@ID->id, name:@Name->string, status:@Status->string, pattern_abstraction:@Pattern_Abstraction->string, pattern_completeness:@Pattern_Completeness->string)[]
+        #:Activation_Zone()->Activation_Zone(:"AttackPattern"->string as 0, :${AttackPatternId}->id as 1)
+        :Alternate_Terms()->Alternate_Terms(:"AttackPattern"->string as 0, :${AttackPatternId}->id as 1)
+        #:Attack_Motivation-Consequences()->Attack_Motivation-Consequences(:"AttackPattern"->string as 0, :${AttackPatternId}->id as 1)
+        :Attack_Prerequisites()->Attack_Prerequisites(:"AttackPattern"->string as 0, :${AttackPatternId}->id as 1)
+        #:Attacker_Skills_or_Knowledge_Required()->Attacker_Skills_or_Knowledge_Required(:"AttackPattern"->string as 0, :${AttackPatternId}->id as 1)
+        #:CIA_Impact()->CIA_Impact(:"AttackPattern"->string as 0, :${AttackPatternId}->id as 1)
+        :Content_History()->Content_History(:"AttackPattern"->string as 0, :${AttackPatternId}->id as 1)
+        :Description()->Description(:"AttackPattern"->string as 0, :${AttackPatternId}->id as 1)
+        #:Examples-Instances()->Examples-Instances(:"AttackPattern"->string as 0, :${AttackPatternId}->id as 1)
+        #:Indicators-Warnings_of_Attack()->Indicators-Warnings_of_Attack(:"AttackPattern"->string as 0, :${AttackPatternId}->id as 1)
+        #:Injection_Vector()->Injection_Vector(:"AttackPattern"->string as 0, :${AttackPatternId}->id as 1)
+        #:Keywords()->Keywords(:"AttackPattern"->string as 0, :${AttackPatternId}->id as 1)
+        #:Methods_of_Attack()->Methods_of_Attack(:"AttackPattern"->string as 0, :${AttackPatternId}->id as 1)
+        #:Obfuscation_Techniques()->Obfuscation_Techniques(:"AttackPattern"->string as 0, :${AttackPatternId}->id as 1)
+        #:Payload()->Payload(:"AttackPattern"->string as 0, :${AttackPatternId}->id as 1)
+        #:Payload_Activation_Impact()->Payload_Activation_Impact(:"AttackPattern"->string as 0, :${AttackPatternId}->id as 1)
+        #:Probing_Techniques()->Probing_Techniques(:"AttackPattern"->string as 0, :${AttackPatternId}->id as 1)
+        #:Purposes()->Purposes(:"AttackPattern"->string as 0, :${AttackPatternId}->id as 1)
+        :References()->References(:"AttackPattern"->string as 0, :${AttackPatternId}->id as 1)
+        :Related_Attack_Patterns()->Related_Attack_Patterns(:${AttackPatternId}->id as 0)
+        #:Related_Guidelines()->Related_Guidelines(:"AttackPattern"->string as 0, :${AttackPatternId}->id as 1)
+        :Related_Vulnerabilities()->Related_Vulnerabilities(:"AttackPattern"->string as 0, :${AttackPatternId}->id as 1)
+        :Related_Weaknesses()->Related_Weaknesses(:"AttackPattern"->string as 0, :${AttackPatternId}->id as 1)
+        #:Relevant_Design_Patterns()->Relevant_Design_Patterns(:"AttackPattern"->string as 0, :${AttackPatternId}->id as 1)
+        #:Relevant_Security_Patterns()->Relevant_Security_Patterns(:"AttackPattern"->string as 0, :${AttackPatternId}->id as 1)
+        #:Relevant_Security_Principles()->Relevant_Security_Principles(:"AttackPattern"->string as 0, :${AttackPatternId}->id as 1)
+        #:Relevant_Security_Requirements()->Relevant_Security_Requirements(:"AttackPattern"->string as 0, :${AttackPatternId}->id as 1)
+        :Resources_Required()->Resources_Required(:"AttackPattern"->string as 0, :${AttackPatternId}->id as 1)
+        #:Solution_and_Mitigations()->Solution_and_Mitigations(:"AttackPattern"->string as 0, :${AttackPatternId}->id as 1)
+        #:Target_Attack_Surface()->Target_Attack_Surface(:"AttackPattern"->string as 0, :${AttackPatternId}->id as 1)
+        #:Technical_Context()->Technical_Context(:"AttackPattern"->string as 0, :${AttackPatternId}->id as 1)
+        #:Typical_Likelihood_of_Exploit()->Typical_Likelihood_of_Exploit(:"AttackPattern"->string as 0, :${AttackPatternId}->id as 1)
+        #:Typical_Severity()->Typical_Severity(:"AttackPattern"->string as 0, :${AttackPatternId}->id as 1)
